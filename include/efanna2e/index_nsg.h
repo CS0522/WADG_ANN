@@ -27,6 +27,10 @@ class IndexNSG : public Index {
   // @CS0522
   unsigned get_ep_() { return this->ep_; }
 
+  // 打印信息
+  // TODO
+  virtual void print_info(unsigned, unsigned, unsigned);
+
   virtual void Build(size_t n, const float *data, const Parameters &parameters) override;
 
   virtual void Search(
@@ -42,16 +46,6 @@ class IndexNSG : public Index {
       unsigned *indices);
   void OptimizeGraph(float* data);
 
-  // @CS0522
-  std::vector<int> get_search_points_counts()
-  {
-    return this->search_points_counts;
-  }
-
-  std::vector<int> get_max_search_lengths()
-  {
-      return this->max_search_lengths;
-  }
 
   protected:
     typedef std::vector<std::vector<unsigned > > CompactGraph;

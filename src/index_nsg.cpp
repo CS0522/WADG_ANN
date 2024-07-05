@@ -18,19 +18,6 @@ namespace efanna2e
                      Index *initializer)
       : Index(dimension, n, m), initializer_{initializer}
   {
-    // @CS0522
-    // DEBUG
-    if (DEBUG)
-    {
-      // 初始化 pre 数组
-      pre = (int *)malloc(sizeof(int) * 1000000);
-      // 值为 -1
-      memset(pre, 0b11111111, sizeof(int) * 1000000);
-
-      // 初始化 mlen 数组
-      mlen = (int *)malloc(sizeof(int) * 1000000);
-      memset(mlen, 0b00000000, sizeof(int) * 1000000);
-    }
   }
 
   IndexNSG::~IndexNSG()
@@ -542,546 +529,188 @@ namespace efanna2e
   void IndexNSG::Search(const float *query, const float *x, size_t K,
                         const Parameters &parameters, unsigned *indices)
   {
-    // DEBUG
-    if (DEBUG)
+    // NSG 随机选点
+    if (NSG_RANDOM)
     {
-      // 计时点
-      auto search_begin = std::chrono::high_resolution_clock::now();
+      const unsigned L = parameters.Get<unsigned>("L_search");
+      data_ = x;
+      std::vector<Neighbor> retset(L + 1);
+      std::vector<unsigned> init_ids(L);
+      boost::dynamic_bitset<> flags{nd_, 0};
+      // std::mt19937 rng(rand());
+      // GenRandom(rng, init_ids.data(), L, (unsigned) nd_);
 
-      // NSG 随机选点
-      if (NSG_RANDOM)
+      // 将导航点的全部邻居放入init_ids
+      unsigned tmp_l = 0;
+      for (; tmp_l < L && tmp_l < final_graph_[ep_].size(); tmp_l++)
       {
-        const unsigned L = parameters.Get<unsigned>("L_search");
-        data_ = x;
-        std::vector<Neighbor> retset(L + 1);
-        std::vector<unsigned> init_ids(L);
-        boost::dynamic_bitset<> flags{nd_, 0};
-        // std::mt19937 rng(rand());
-        // GenRandom(rng, init_ids.data(), L, (unsigned) nd_);
+        init_ids[tmp_l] = final_graph_[ep_][tmp_l];
+        flags[init_ids[tmp_l]] = true;
+      }
+      // tmp_l = 50
 
-        // DEBUG 导航点
-        std::cout << std::endl
-                  << "===== DEBUG: Search for query " << search_points_counts.size() << " =====\n"
-                  << std::endl;
-        std::cout << "Navigate node: " << std::endl;
-        std::cout << "id: " << std::setw(6) << ep_ << ", dis: " << std::setw(6)
-                  << distance_->compare(query, data_ + dimension_ * ep_, (unsigned)dimension_) << std::endl
-                  << std::endl;
-        std::cout << "Neighbor points of navigate node: " << std::endl;
-
-        // 将导航点的全部邻居放入init_ids
-        unsigned tmp_l = 0;
-        for (; tmp_l < L && tmp_l < final_graph_[ep_].size(); tmp_l++)
-        {
-          init_ids[tmp_l] = final_graph_[ep_][tmp_l];
-          flags[init_ids[tmp_l]] = true;
-
-          // DEBUG 放入 init_ids 中的点的 id 和 dist
-          auto id = final_graph_[ep_][tmp_l];
-          std::cout << "id: " << std::setw(6) << id
-                    << ", dis: " << std::setw(6) << distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_)
-                    << std::endl;
-        }
-        // tmp_l = 50
-
-        // DEBUG 打印 init_ids 随机选点前的信息
-        std::cout << std::endl
-                  << "Initial init_ids before random (length = " << tmp_l << "): " << std::endl;
-        for (int i = 0; i < tmp_l; ++i)
-        {
-          std::cout << "id: " << std::setw(6) << init_ids[i] << ", dis: "
-                    << std::setw(6) << distance_->compare(query, data_ + dimension_ * init_ids[i], (unsigned)dimension_) << std::endl;
-        }
-
-        // 导航点邻居不足L个则随机选取节点，直至init_ids包括L个节点
-        while (tmp_l < L)
-        {
-          unsigned id = rand() % nd_;
-          if (flags[id])
-            continue;
-          flags[id] = true;
-          init_ids[tmp_l] = id;
-          tmp_l++;
-        }
-
-        // 将init_ids中的节点放入retset作为候选节点集
-        for (unsigned i = 0; i < init_ids.size(); i++)
-        {
-          unsigned id = init_ids[i];
-          float dist =
-              distance_->compare(data_ + dimension_ * id, query, (unsigned)dimension_);
-          retset[i] = Neighbor(id, dist, true);
-          // flags[id] = true;
-        }
-
-        std::sort(retset.begin(), retset.begin() + L);
-
-        // 计时点
-        auto before_greedy_search = std::chrono::high_resolution_clock::now();
-
-        // DEBUG 打印 greedy search 前的 retset 信息
-        std::cout << std::endl
-                  << "Initial retset after random and sort (length = " << retset.size() << "): " << std::endl;
-        for (int i = 0; i < init_ids.size(); ++i)
-        {
-          std::cout << "id: " << std::setw(6) << retset[i].id << ", dis: " << std::setw(6) << retset[i].distance << std::endl;
-          // retset 中的点的前驱为导航点，路径为 1
-          pre[retset[i].id] = ep_;
-          mlen[retset[i].id] = 1;
-        }
-        // 打印 greedy search 的起点信息，即 retset 的第一个点
-        std::cout << "\nStart point (retset first point): " << std::endl;
-        std::cout << "id: " << std::setw(6) << retset[0].id << ", dis: " << std::setw(6) << retset[0].distance << std::endl;
-        // 存储搜索的起始点
-        this->start_points.emplace_back(retset[0].id, retset[0].distance);
-        // subtitle
-        std::cout << std::endl
-                  << "===== DEBUG: Greedy search =====\n"
-                  << std::endl;
-
-        // 计时点
-        auto greedy_search_begin = std::chrono::high_resolution_clock::now();
-
-        // greedy search
-        int k = 0;
-        // 统计检索点的数量
-        int search_points_count = init_ids.size();
-        while (k < (int)L)
-        {
-          int nk = L;
-
-          if (retset[k].flag)
-          {
-            retset[k].flag = false;
-            unsigned n = retset[k].id;
-
-            // DEBUG 打印当前检索的点
-            float curr_dist = distance_->compare(query, data_ + dimension_ * n, (unsigned)dimension_);
-            std::cout << "Level: " << std::setw(2) << mlen[n] << " - "
-                      << "id: " << std::setw(6) << n << ", dis: "
-                      << std::setw(6) << curr_dist << ", pre: " << std::setw(6) << pre[n] << " " << std::endl;
-
-            for (unsigned m = 0; m < final_graph_[n].size(); ++m)
-            {
-              unsigned id = final_graph_[n][m];
-
-              // DEBUG 更新每个点的最长搜索路径
-              mlen[id] = std::max(mlen[id], mlen[n] + 1);
-
-              if (flags[id])
-                continue;
-              flags[id] = 1;
-              float dist =
-                  distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_);
-
-              // DEBUG 统计检索点数量
-              ++search_points_count;
-
-              if (dist >= retset[L - 1].distance)
-                continue;
-              Neighbor nn(id, dist, true);
-              // TODO 修改随机补点的 InsertIntoPool
-              int r = InsertIntoPool(retset.data(), L, nn);
-              // int r = InsertIntoPool(retset, L, nn);
-
-              // DEBUG 更新前驱
-              pre[id] = n;
-              std::cout << "id: " << id << ", dis: " << dist << ", pre: " << pre[id] << ", 插入位置: " << r << ", 插入后 retset 长度: " << retset.size() << std::endl;
-
-              if (r < nk)
-                nk = r;
-            }
-          }
-          if (nk <= k)
-            k = nk;
-          else
-            ++k;
-        }
-
-        // 计时点
-        auto greedy_search_end = std::chrono::high_resolution_clock::now();
-
-        // 记录搜索结果
-        for (size_t i = 0; i < K; i++)
-        {
-          indices[i] = retset[i].id;
-        }
-
-        // DEBUG 记录最长搜索路径和检索点数量
-        // subtitle
-        std::cout << std::endl
-                  << "===== DEBUG: Statistics =====\n";
-
-        auto max_len = std::max_element(mlen, mlen + 1000000);
-        std::cout << std::endl
-                  << "Max search length of current query: " << *max_len << std::endl;
-        // std::cout << std::endl
-        //           << *max_len << std::endl;
-        this->max_search_lengths.push_back(*max_len);
-        // 还原 mlen
-        memset(mlen, 0b00000000, sizeof(int) * 1000000);
-
-        std::cout << "Search points count of current query: " << search_points_count << std::endl;
-        // std::cout << search_points_count << std::endl;
-        this->search_points_counts.push_back(search_points_count);
-
-        // 搜索时间打印
-        // Eplased time before greedy search
-        auto time_before_greedy_search = (std::chrono::duration<double>(before_greedy_search - search_begin)).count();
-        std::cout << "\nEplased time before greedy search: " << time_before_greedy_search << std::endl;
-        // Eplased time of greedy search
-        auto time_of_greedy_search = (std::chrono::duration<double>(greedy_search_end - greedy_search_begin)).count();
-        std::cout << "Eplased time before greedy search: " << time_of_greedy_search << std::endl;
-
-        // 加入到 search times 中
-        this->search_times.emplace_back(time_before_greedy_search, time_of_greedy_search);
+      // 导航点邻居不足L个则随机选取节点，直至init_ids包括L个节点
+      while (tmp_l < L)
+      {
+        unsigned id = rand() % nd_;
+        if (flags[id])
+          continue;
+        flags[id] = true;
+        init_ids[tmp_l] = id;
+        tmp_l++;
       }
 
-      // NSG 取消随机选点
-      else
+      // 将init_ids中的节点放入retset作为候选节点集
+      for (unsigned i = 0; i < init_ids.size(); i++)
       {
-        const unsigned L = parameters.Get<unsigned>("L_search");
-        data_ = x;
-        std::vector<Neighbor> retset;
-        std::vector<unsigned> init_ids;
-        boost::dynamic_bitset<> flags{nd_, 0};
-        // std::mt19937 rng(rand());
-        // GenRandom(rng, init_ids.data(), L, (unsigned) nd_);
+        unsigned id = init_ids[i];
+        float dist =
+            distance_->compare(data_ + dimension_ * id, query, (unsigned)dimension_);
+        retset[i] = Neighbor(id, dist, true);
+        // flags[id] = true;
+      }
 
-        // DEBUG 导航点
-        std::cout << std::endl
-                  << "===== DEBUG: Search for query " << search_points_counts.size() << " =====\n"
-                  << std::endl;
-        std::cout << "Navigate node: " << std::endl;
-        std::cout << "id: " << std::setw(6) << ep_ << ", dis: " << std::setw(6)
-                  << distance_->compare(query, data_ + dimension_ * ep_, (unsigned)dimension_) << std::endl
-                  << std::endl;
-        std::cout << "Neighbor points of navigate node: " << std::endl;
+      std::sort(retset.begin(), retset.begin() + L);
 
-        // 将导航点的全部邻居放入init_ids
-        unsigned tmp_l = 0;
-        for (; tmp_l < L && tmp_l < final_graph_[ep_].size(); tmp_l++)
+      // greedy search
+      int k = 0;
+      while (k < (int)L)
+      {
+        int nk = L;
+
+        if (retset[k].flag)
         {
-          // init_ids[tmp_l] = final_graph_[ep_][tmp_l];
-          // flags[init_ids[tmp_l]] = true;
-          init_ids.push_back(final_graph_[ep_][tmp_l]);
-          flags[init_ids[tmp_l]] = true;
+          retset[k].flag = false;
+          unsigned n = retset[k].id;
 
-          // DEBUG 放入 init_ids 中的点的 id 和 dist
-          auto id = final_graph_[ep_][tmp_l];
-          std::cout << "id: " << std::setw(6) << id
-                    << ", dis: " << std::setw(6) << distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_)
-                    << std::endl;
-        }
-        // tmp_l = 50
-
-        // 不进行随机补点
-
-        // 将init_ids中的节点放入retset作为候选节点集
-        for (unsigned i = 0; i < init_ids.size(); i++)
-        {
-          unsigned id = init_ids[i];
-          float dist =
-              distance_->compare(data_ + dimension_ * id, query, (unsigned)dimension_);
-          // retset[i] = Neighbor(id, dist, true);
-          // flags[id] = true;
-          retset.push_back(Neighbor(id, dist, true));
-        }
-
-        // std::sort(retset.begin(), retset.begin() + L);
-        std::sort(retset.begin(), retset.end());
-
-        // 计时点
-        auto before_greedy_search = std::chrono::high_resolution_clock::now();
-
-        // DEBUG 打印 greedy search 前的 retset 信息
-        std::cout << std::endl
-                  << "Initial retset without random after sort (length = " << retset.size() << "): " << std::endl;
-        for (int i = 0; i < retset.size(); ++i)
-        {
-          std::cout << "id: " << std::setw(6) << retset[i].id << ", dis: " << std::setw(6) << retset[i].distance << std::endl;
-          // retset 中的点的前驱为导航点，路径为 1
-          pre[retset[i].id] = ep_;
-          mlen[retset[i].id] = 1;
-        }
-        // 打印 greedy search 的起点信息，即 retset 的第一个点
-        std::cout << "\nStart point (retset first point): " << std::endl;
-        std::cout << "id: " << std::setw(6) << retset[0].id << ", dis: " << std::setw(6) << retset[0].distance << std::endl;
-        // 存储搜索的起始点
-        this->start_points.emplace_back(retset[0].id, retset[0].distance);
-        // subtitle
-        std::cout << std::endl
-                  << "===== DEBUG: Greedy search =====\n"
-                  << std::endl;
-
-        // 计时点
-        auto greedy_search_begin = std::chrono::high_resolution_clock::now();
-
-        // greedy search
-        int k = 0;
-        // 统计检索点的数量
-        int search_points_count = retset.size();
-        while (k < (int)L)
-        {
-          int nk = (L < retset.size()) ? L : retset.size();
-
-          if (retset[k].flag)
+          for (unsigned m = 0; m < final_graph_[n].size(); ++m)
           {
-            retset[k].flag = false;
-            unsigned n = retset[k].id;
+            unsigned id = final_graph_[n][m];
 
-            // DEBUG 打印当前检索的点
-            float curr_dist = distance_->compare(query, data_ + dimension_ * n, (unsigned)dimension_);
-            std::cout << "Level: " << std::setw(2) << mlen[n] << " - "
-                      << "id: " << std::setw(6) << n << ", dis: "
-                      << std::setw(6) << curr_dist << ", pre: " << std::setw(6) << pre[n] << " " << std::endl;
+            if (flags[id])
+              continue;
+            flags[id] = 1;
+            float dist =
+                distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_);
 
-            for (unsigned m = 0; m < final_graph_[n].size(); ++m)
-            {
-              unsigned id = final_graph_[n][m];
+            if (dist >= retset[L - 1].distance)
+              continue;
+            Neighbor nn(id, dist, true);
+            int r = InsertIntoPool(retset.data(), L, nn);
+            // TODO 修改随机补点的 InsertIntoPool
+            // int r = InsertIntoPool(retset, L, nn);
 
-              // DEBUG 更新每个点的最长搜索路径
-              mlen[id] = std::max(mlen[id], mlen[n] + 1);
-
-              if (flags[id])
-                continue;
-              flags[id] = 1;
-              float dist =
-                  distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_);
-
-              // DEBUG 统计检索点数量
-              ++search_points_count;
-
-              if (dist >= retset[(L < retset.size() ? L : retset.size()) - 1].distance)
-                continue;
-              Neighbor nn(id, dist, true);
-              // int r = InsertIntoPool(retset.data(), L, nn);
-              auto r = InsertIntoPool(retset, (L < retset.size()) ? L : retset.size(), nn);
-
-              // DEBUG 更新前驱
-              pre[id] = n;
-              std::cout << "id: " << id << ", dis: " << dist << ", pre: " << pre[id] << ", 插入位置: " << r << ", 插入后 retset 长度: " << retset.size() << std::endl;
-
-              if (r < nk)
-                nk = r;
-            }
+            if (r < nk)
+              nk = r;
           }
-          if (nk <= k)
-            k = nk;
-          else
-            ++k;
         }
-
-        // 计时点
-        auto greedy_search_end = std::chrono::high_resolution_clock::now();
-
-        // 记录搜索结果
-        for (size_t i = 0; i < K; i++)
-        {
-          indices[i] = retset[i].id;
-        }
-
-        // DEBUG 记录最长搜索路径和检索点数量
-        // subtitle
-        std::cout << std::endl
-                  << "===== DEBUG: Statistics =====\n";
-
-        auto max_len = std::max_element(mlen, mlen + 1000000);
-        // std::cout << std::endl << "Max search length of current query: " << *max_len << std::endl;
-        std::cout << std::endl
-                  << *max_len << std::endl;
-        this->max_search_lengths.push_back(*max_len);
-        // 还原 mlen
-        memset(mlen, 0b00000000, sizeof(int) * 1000000);
-
-        // std::cout << "Search points count of current query: " << search_points_count << std::endl;
-        std::cout << search_points_count << std::endl;
-        this->search_points_counts.push_back(search_points_count);
-
-        // 搜索时间打印
-        // Eplased time before greedy search
-        auto time_before_greedy_search = (std::chrono::duration<double>(before_greedy_search - search_begin)).count();
-        std::cout << "\nEplased time before greedy search: " << time_before_greedy_search << std::endl;
-        // Eplased time of greedy search
-        auto time_of_greedy_search = (std::chrono::duration<double>(greedy_search_end - greedy_search_begin)).count();
-        std::cout << "Eplased time before greedy search: " << time_of_greedy_search << std::endl;
-
-        // 加入到 search times 中
-        this->search_times.emplace_back(time_before_greedy_search, time_of_greedy_search);
+        if (nk <= k)
+          k = nk;
+        else
+          ++k;
+      }
+      // 记录搜索结果
+      for (size_t i = 0; i < K; i++)
+      {
+        indices[i] = retset[i].id;
       }
     }
 
-    // NORMAL
+    // NSG 取消随机选点
     else
     {
-      // NSG 随机选点
-      if (NSG_RANDOM)
+      const unsigned L = parameters.Get<unsigned>("L_search");
+      data_ = x;
+      std::vector<Neighbor> retset;
+      std::vector<unsigned> init_ids;
+      boost::dynamic_bitset<> flags{nd_, 0};
+      // std::mt19937 rng(rand());
+      // GenRandom(rng, init_ids.data(), L, (unsigned) nd_);
+
+      // 将导航点的全部邻居放入init_ids
+      unsigned tmp_l = 0;
+      for (; tmp_l < L && tmp_l < final_graph_[ep_].size(); tmp_l++)
       {
-        const unsigned L = parameters.Get<unsigned>("L_search");
-        data_ = x;
-        std::vector<Neighbor> retset(L + 1);
-        std::vector<unsigned> init_ids(L);
-        boost::dynamic_bitset<> flags{nd_, 0};
-        // std::mt19937 rng(rand());
-        // GenRandom(rng, init_ids.data(), L, (unsigned) nd_);
+        // init_ids[tmp_l] = final_graph_[ep_][tmp_l];
+        // flags[init_ids[tmp_l]] = true;
+        init_ids.push_back(final_graph_[ep_][tmp_l]);
+        flags[init_ids[tmp_l]] = true;
+      }
+      // tmp_l = 50
 
-        // 将导航点的全部邻居放入init_ids
-        unsigned tmp_l = 0;
-        for (; tmp_l < L && tmp_l < final_graph_[ep_].size(); tmp_l++)
-        {
-          init_ids[tmp_l] = final_graph_[ep_][tmp_l];
-          flags[init_ids[tmp_l]] = true;
-        }
-        // tmp_l = 50
+      // 不进行随机补点
 
-        // 导航点邻居不足L个则随机选取节点，直至init_ids包括L个节点
-        while (tmp_l < L)
-        {
-          unsigned id = rand() % nd_;
-          if (flags[id])
-            continue;
-          flags[id] = true;
-          init_ids[tmp_l] = id;
-          tmp_l++;
-        }
-
-        // 将init_ids中的节点放入retset作为候选节点集
-        for (unsigned i = 0; i < init_ids.size(); i++)
-        {
-          unsigned id = init_ids[i];
-          float dist =
-              distance_->compare(data_ + dimension_ * id, query, (unsigned)dimension_);
-          retset[i] = Neighbor(id, dist, true);
-          // flags[id] = true;
-        }
-
-        std::sort(retset.begin(), retset.begin() + L);
-
-        // greedy search
-        int k = 0;
-        while (k < (int)L)
-        {
-          int nk = L;
-
-          if (retset[k].flag)
-          {
-            retset[k].flag = false;
-            unsigned n = retset[k].id;
-
-            for (unsigned m = 0; m < final_graph_[n].size(); ++m)
-            {
-              unsigned id = final_graph_[n][m];
-
-              if (flags[id])
-                continue;
-              flags[id] = 1;
-              float dist =
-                  distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_);
-
-              if (dist >= retset[L - 1].distance)
-                continue;
-              Neighbor nn(id, dist, true);
-              int r = InsertIntoPool(retset.data(), L, nn);
-              // TODO 修改随机补点的 InsertIntoPool
-              // int r = InsertIntoPool(retset, L, nn);
-
-              if (r < nk)
-                nk = r;
-            }
-          }
-          if (nk <= k)
-            k = nk;
-          else
-            ++k;
-        }
-        // 记录搜索结果
-        for (size_t i = 0; i < K; i++)
-        {
-          indices[i] = retset[i].id;
-        }
+      // 将init_ids中的节点放入retset作为候选节点集
+      for (unsigned i = 0; i < init_ids.size(); i++)
+      {
+        unsigned id = init_ids[i];
+        float dist =
+            distance_->compare(data_ + dimension_ * id, query, (unsigned)dimension_);
+        // retset[i] = Neighbor(id, dist, true);
+        // flags[id] = true;
+        retset.push_back(Neighbor(id, dist, true));
       }
 
-      // NSG 取消随机选点
-      else
+      // std::sort(retset.begin(), retset.begin() + L);
+      std::sort(retset.begin(), retset.end());
+
+      // greedy search
+      int k = 0;
+      while (k < (int)L)
       {
-        const unsigned L = parameters.Get<unsigned>("L_search");
-        data_ = x;
-        std::vector<Neighbor> retset;
-        std::vector<unsigned> init_ids;
-        boost::dynamic_bitset<> flags{nd_, 0};
-        // std::mt19937 rng(rand());
-        // GenRandom(rng, init_ids.data(), L, (unsigned) nd_);
+        int nk = (L < retset.size()) ? L : retset.size();
 
-        // 将导航点的全部邻居放入init_ids
-        unsigned tmp_l = 0;
-        for (; tmp_l < L && tmp_l < final_graph_[ep_].size(); tmp_l++)
+        if (retset[k].flag)
         {
-          // init_ids[tmp_l] = final_graph_[ep_][tmp_l];
-          // flags[init_ids[tmp_l]] = true;
-          init_ids.push_back(final_graph_[ep_][tmp_l]);
-          flags[init_ids[tmp_l]] = true;
-        }
-        // tmp_l = 50
+          retset[k].flag = false;
+          unsigned n = retset[k].id;
 
-        // 不进行随机补点
-
-        // 将init_ids中的节点放入retset作为候选节点集
-        for (unsigned i = 0; i < init_ids.size(); i++)
-        {
-          unsigned id = init_ids[i];
-          float dist =
-              distance_->compare(data_ + dimension_ * id, query, (unsigned)dimension_);
-          // retset[i] = Neighbor(id, dist, true);
-          // flags[id] = true;
-          retset.push_back(Neighbor(id, dist, true));
-        }
-
-        // std::sort(retset.begin(), retset.begin() + L);
-        std::sort(retset.begin(), retset.end());
-
-        // greedy search
-        int k = 0;
-        while (k < (int)L)
-        {
-          int nk = (L < retset.size()) ? L : retset.size();
-
-          if (retset[k].flag)
+          for (unsigned m = 0; m < final_graph_[n].size(); ++m)
           {
-            retset[k].flag = false;
-            unsigned n = retset[k].id;
+            unsigned id = final_graph_[n][m];
 
-            for (unsigned m = 0; m < final_graph_[n].size(); ++m)
-            {
-              unsigned id = final_graph_[n][m];
+            if (flags[id])
+              continue;
+            flags[id] = 1;
+            float dist =
+                distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_);
 
-              if (flags[id])
-                continue;
-              flags[id] = 1;
-              float dist =
-                  distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_);
+            if (dist >= retset[(L < retset.size() ? L : retset.size()) - 1].distance)
+              continue;
+            Neighbor nn(id, dist, true);
+            // int r = InsertIntoPool(retset.data(), L, nn);
+            auto r = InsertIntoPool(retset, (L < retset.size()) ? L : retset.size(), nn);
 
-              if (dist >= retset[(L < retset.size() ? L : retset.size()) - 1].distance)
-                continue;
-              Neighbor nn(id, dist, true);
-              // int r = InsertIntoPool(retset.data(), L, nn);
-              auto r = InsertIntoPool(retset, (L < retset.size()) ? L : retset.size(), nn);
-
-              if (r < nk)
-                nk = r;
-            }
+            if (r < nk)
+              nk = r;
           }
-          if (nk <= k)
-            k = nk;
-          else
-            ++k;
         }
-        // 记录搜索结果
-        for (size_t i = 0; i < K; i++)
-        {
-          indices[i] = retset[i].id;
-        }
+        if (nk <= k)
+          k = nk;
+        else
+          ++k;
+      }
+      // 记录搜索结果
+      for (size_t i = 0; i < K; i++)
+      {
+        indices[i] = retset[i].id;
       }
     }
+  }
+
+  // TODO
+  void IndexNSG::print_info(unsigned query_num, unsigned L, unsigned K)
+  {
+    std::cout << "\n===== NSG =====\n"
+              << std::endl;
+    std::cout << "Queries: " << query_num << std::endl;
+    // print hyper parameters
+    std::cout << "Hyperparameters: "
+              << "Q (search length) = " << L
+              << ", K (nearest neighbor) = " << K << std::endl;
+    std::cout << "Random: " << (NSG_RANDOM ? "enabled" : "disabled") << std::endl;
+
+    std::cout << "\n===== END =====\n";
   }
 
   void IndexNSG::SearchWithOptGraph(const float *query, size_t K,

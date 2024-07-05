@@ -2,7 +2,7 @@
 // Created by 付聪 on 2017/6/21.
 //
 
-#include <efanna2e/index_nsg.h>
+#include <efanna2e/index_nsg_debug.h>
 #include <efanna2e/util.h>
 // @CS0522
 #include <iomanip>
@@ -76,8 +76,13 @@ int main(int argc, char **argv)
   // align the data before build query_load = efanna2e::data_align(query_load,
   // query_num, query_dim);
   // efanna2e::L2确定距离比较器，默认欧氏距离平方
-  efanna2e::IndexNSG index(dim, points_num, efanna2e::L2, nullptr);
-  index.Load(argv[3]);
+  efanna2e::IndexNSG* index = new efanna2e::IndexNSG(dim, points_num, efanna2e::L2, nullptr);
+  // DEBUG
+  if (DEBUG)
+  {
+    index = new efanna2e::IndexNSG_DEBUG(dim, points_num, efanna2e::L2, nullptr);
+  }
+  index->Load(argv[3]);
 
   efanna2e::Parameters paras;
   paras.Set<unsigned>("L_search", L);
@@ -86,146 +91,59 @@ int main(int argc, char **argv)
   auto s = std::chrono::high_resolution_clock::now();
   std::vector<std::vector<unsigned>> res;
 
-  // DEBUG
-  if (DEBUG)
+  std::string file_path = NSG_RANDOM ? "nsg_random" : "nsg_no_random";
+  std::streambuf *cout_bak;
+  std::ofstream *fout;
+
+  for (unsigned i = 0; i < query_num; i++)
   {
-    std::string file_path = NSG_RANDOM ? "nsg_random" : "nsg_no_random";
-
-    for (unsigned i = 0; i < query_num; i++)
-    {
-      // DEBUG
-      // redirect I/O stream
-      std::ofstream fout("./anals/" + file_path + "/nsg_query_" + std::to_string(i) + ".txt");
-      std::streambuf *cout_bak;
-      // rdbuf() 重新定向，返回旧缓冲区指针
-      cout_bak = std::cout.rdbuf(fout.rdbuf());
-
-      std::vector<unsigned> tmp(K);
-      index.Search(query_load + i * dim, data_load, K, paras, tmp.data());
-      res.push_back(tmp);
-
-      // DEBUG
-      // recover I/O stream
-      std::cout.rdbuf(cout_bak);
-      fout.close();
-    }
-    auto e = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = e - s;
-    // std::cout << "search time: " << diff.count() << "\n";
-
     // DEBUG
     // redirect I/O stream
-    std::ofstream fout("./anals/" + file_path + "/nsg_result.txt");
-    std::streambuf *cout_bak;
-    // rdbuf() 重新定向，返回旧缓冲区指针
-    cout_bak = std::cout.rdbuf(fout.rdbuf());
-
-    std::cout << "search time: " << diff.count() << "\n";
-
-    std::cout << "\n===== NSG =====\n"
-              << std::endl;
-    std::cout << "Queries: " << query_num << std::endl;
-    // print hyper parameters
-    std::cout << "Hyperparameters: "
-              << "Q (search length) = " << L
-              << ", K (nearest neighbor) = " << K << std::endl;
-    std::cout << "Random: " << (NSG_RANDOM ? "enabled" : "disabled") << std::endl;
-
-    // DEBUG
-    std::cout << "\n===== DEBUG: " << (NSG_RANDOM ? "random" : "no random") << " =====\n"
-              << std::endl;
-    // 每次搜索的点数
-    std::cout << "Search points in Search: " << std::endl;
-    auto counts = index.get_search_points_counts();
-    int total_counts = 0;
-    // 每个 search 的搜索点数
-    std::cout << "Each query (total " << counts.size() << " queries): " << std::endl;
-    for (int i = 0; i < counts.size(); i++)
+    if (DEBUG)
     {
-      // calculate total counts
-      total_counts += counts[i];
-      // print each count
-      std::cout << counts[i] << ", "[i == (counts.size() - 1)];
-    }
-    // 总的搜索点数，可以看平均值
-    std::cout << "\nTotal (for " << counts.size() << " queries): " << total_counts << std::endl;
-    // 最大值
-    std::cout << "Max count: " << *std::max_element(counts.begin(), counts.end()) << std::endl
-              << std::endl;
-
-    // 每次搜索的最长路径
-    std::cout << "Max search length in Search: " << std::endl;
-    auto lengths = index.get_max_search_lengths();
-    int total_lengths = 0;
-    // 每个 search 的最长搜索路径
-    std::cout << "Each query (total " << lengths.size() << " queries): " << std::endl;
-    for (int i = 0; i < lengths.size(); i++)
-    {
-      total_lengths += lengths[i];
-      std::cout << lengths[i] << ", "[i == (lengths.size() - 1)];
-    }
-    // 总的最长搜索路径，可以看平均值
-    std::cout << "\nTotal (for " << lengths.size() << " queries): " << total_lengths << std::endl
-              << std::endl;
-    // 最大值
-    std::cout << "Max length: " << *std::max_element(lengths.begin(), lengths.end()) << std::endl
-              << std::endl;
-
-    // 每次搜索的起始点的信息
-    std::cout << "Start point of each query: " << std::endl;
-    auto points = index.get_start_points();
-    for (int i = 0; i < points.size(); i++)
-    {
-      std::cout << "id: " << std::setw(6) << points[i].first << ", dis: " << std::setw(6) << points[i].second << std::endl;
+      fout = new std::ofstream("./anals/" + file_path + "/nsg_query_" + std::to_string(i) + ".txt");
+      // rdbuf() 重新定向，返回旧缓冲区指针
+      cout_bak = std::cout.rdbuf(fout->rdbuf());
     }
 
-    // 分部分搜索时间
-    std::cout << "\nPart eplased time of each search (time before greedy search, time of greedy search): " << std::endl;
-    auto times = index.get_search_times();
-    for (int i = 0; i < times.size(); ++i)
-    {
-      std::cout << "(" << times[i].first << ", " << times[i].second << ")\n";
-    }
-
-    std::cout << "\n===== END =====\n";
-
-    save_result(argv[6], res);
+    std::vector<unsigned> tmp(K);
+    index->Search(query_load + i * dim, data_load, K, paras, tmp.data());
+    res.push_back(tmp);
 
     // DEBUG
     // recover I/O stream
-    std::cout.rdbuf(cout_bak);
-    fout.close();
+    if (DEBUG)
+    {
+      std::cout.rdbuf(cout_bak);
+      fout->close();
+    }
+  }
+  auto e = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> diff = e - s;
+  // std::cout << "search time: " << diff.count() << "\n";
+
+  // DEBUG
+  // redirect I/O stream
+  if (DEBUG)
+  {
+    fout = new std::ofstream("./anals/" + file_path + "/nsg_result.txt");
+    // rdbuf() 重新定向，返回旧缓冲区指针
+    cout_bak = std::cout.rdbuf(fout->rdbuf());
   }
 
-  // NORMAL
-  else
+  std::cout << "search time: " << diff.count() << "\n";
+
+  // print info
+  index->print_info(query_num, L, K);
+
+  save_result(argv[6], res);
+
+  // DEBUG
+  // recover I/O stream
+  if (DEBUG)
   {
-    for (unsigned i = 0; i < query_num; i++)
-    {
-      std::vector<unsigned> tmp(K);
-      index.Search(query_load + i * dim, data_load, K, paras, tmp.data());
-      res.push_back(tmp);
-    }
-    auto e = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = e - s;
-    std::cout << "search time: " << diff.count() << "\n";
-
-    // print search infos
-    if (PRINT_INFO)
-    {
-      std::cout << "\n===== NSG =====\n"
-                << std::endl;
-      std::cout << "Queries: " << query_num << std::endl;
-      // print hyper parameters
-      std::cout << "Hyperparameters: "
-                << "Q (search length) = " << L
-                << ", K (nearest neighbor) = " << K << std::endl;
-      std::cout << "Random: " << (NSG_RANDOM ? "enabled" : "disabled") << std::endl;
-
-      std::cout << "\n===== END =====\n";
-    }
-
-    save_result(argv[6], res);
+    std::cout.rdbuf(cout_bak);
+    fout->close();
   }
 
   return 0;
