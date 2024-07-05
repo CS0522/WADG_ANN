@@ -173,6 +173,14 @@ class Plot2:
         self.wadg_max_search_length = []
         self.nsg_random_max_search_length = []
         self.nsg_no_random_max_search_length = []
+
+        # 搜索时间
+        self.wadg_search_time_before_greedy = []
+        self.nsg_random_search_time_before_greedy = []
+        self.nsg_no_random_search_time_before_greedy = []
+        self.wadg_search_time_of_greedy = []
+        self.nsg_random_search_time_of_greedy = []
+        self.nsg_no_random_search_time_of_greedy = []
         
         # read data and plot
         for expr, file_path in self.exprs.items():
@@ -206,6 +214,25 @@ class Plot2:
                                      self.nsg_random_max_search_length,
                                      self.nsg_no_random_max_search_length,
                                      expr, self.save_figs_base_path)
+            elif ('search_time_before' == expr):
+                    self.comparison_line_chart(self.wadg_search_time_before_greedy,
+                                           self.nsg_random_search_time_before_greedy,
+                                           self.nsg_no_random_search_time_before_greedy,
+                                           expr, self.save_figs_base_path)
+                    self.diff_line_chart(self.wadg_search_time_before_greedy,
+                                         self.nsg_random_search_time_before_greedy,
+                                         self.nsg_no_random_search_time_before_greedy,
+                                         expr, self.save_figs_base_path)
+            elif ('search_time_of' == expr):
+                    self.comparison_line_chart(self.wadg_search_time_of_greedy,
+                                           self.nsg_random_search_time_of_greedy,
+                                           self.nsg_no_random_search_time_of_greedy,
+                                           expr, self.save_figs_base_path)
+                    self.diff_line_chart(self.wadg_search_time_of_greedy,
+                                         self.nsg_random_search_time_of_greedy,
+                                         self.nsg_no_random_search_time_of_greedy,
+                                         expr, self.save_figs_base_path)
+                    
 
 
     '''
@@ -234,6 +261,14 @@ class Plot2:
                     self.wadg_max_search_length.append(int(row[0]))
                     self.nsg_random_max_search_length.append(int(row[1]))
                     self.nsg_no_random_max_search_length.append(int(row[2]))
+                elif ('search_time_before' == expr):
+                    self.wadg_search_time_before_greedy.append(float(row[0]))
+                    self.nsg_random_search_time_before_greedy.append(float(row[1]))
+                    self.nsg_no_random_search_time_before_greedy.append(float(row[2]))
+                elif ('search_time_of' == expr):
+                    self.wadg_search_time_of_greedy.append(float(row[0]))
+                    self.nsg_random_search_time_of_greedy.append(float(row[1]))
+                    self.nsg_no_random_search_time_of_greedy.append(float(row[2]))
             
                 row_count += 1
 
@@ -314,9 +349,15 @@ if __name__ == "__main__":
 
     exprs = {'start_point_dist': './anals/pure_data_start_points.csv',
              'search_points_count': './anals/pure_data_search_points.csv',
-             'max_search_length': './anals/pure_data_max_search_length.csv'
+             'max_search_length': './anals/pure_data_max_search_length.csv',
+             'search_time_before': './anals/pure_data_search_time_before.csv',
+             'search_time_of': './anals/pure_data_search_time_of.csv'
             }
     save_figs_base_path = './anals/debug_figs/'
+    exprs = {
+        
+    }
+
     num = 1000
 
     p = Plot2(exprs, save_figs_base_path, num)
