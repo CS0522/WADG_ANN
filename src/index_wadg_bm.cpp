@@ -1,0 +1,199 @@
+/*
+ * @Author: Chen Shi
+ * @Date: 2024-03-08 14:50:58
+ * @Description: implement of IndexWADG_BM class
+ */
+
+#include <map>
+#include <cstring>
+#include "efanna2e/index_wadg_bm.h"
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+
+#include <omp.h>
+#include <bitset>
+#include <chrono>
+#include <cmath>
+#include <boost/dynamic_bitset.hpp>
+
+#include <efanna2e/exceptions.h>
+#include <efanna2e/parameters.h>
+
+namespace efanna2e
+{
+  // @CS0522
+  IndexWADG_BM::IndexWADG_BM(const size_t dimension, const size_t n, Metric m, const unsigned K,
+                       Index *initializer)
+      : IndexNSG_BM(dimension, n, m, initializer)
+  {
+    
+  }
+
+  // @CS0522
+  IndexWADG_BM::~IndexWADG_BM()
+  {
+    if (distance_ != nullptr)
+    {
+      delete distance_;
+      distance_ = nullptr;
+    }
+    if (initializer_ != nullptr)
+    {
+      delete initializer_;
+      initializer_ = nullptr;
+    }
+  }
+
+  // @CS0522
+  void IndexWADG_BM::Set_data(const float *x)
+  {
+    data_ = x;
+  }
+
+  // @CS0522
+  void IndexWADG_BM::Set_lru()
+  {
+    // 初始化 LRU 队列
+    // (key, value): (下标, 有效热点 id)
+    hot_points_lru = new LRUCache(max_hot_points_num);
+    // 将导航点的全部邻居放入 LRU 队列
+    unsigned ep = get_ep_();
+
+    for (unsigned i = 0; i < max_hot_points_num && i < final_graph_[ep].size(); i++)
+    {
+      hot_points_lru->put(final_graph_[ep][i]);
+    }
+  }
+
+  // @CS0522
+  void IndexWADG_BM::Search(const float *query, const Parameters &parameters, unsigned *&indices)
+  {
+    auto L = parameters.Get<unsigned>("L_search");
+    auto K = parameters.Get<unsigned>("K_search");
+
+    std::vector<Neighbor> retset;
+    boost::dynamic_bitset<> flags{nd_, 0};
+    int lru_size = hot_points_lru->get_size();
+
+    unsigned init_size = (L < lru_size) ? L : lru_size;
+
+    // LRU 所有点加入 retset 中
+    for (int i = 0; i < lru_size; ++i)
+    {
+      unsigned id = hot_points_lru->visit(i);
+      float dist = distance_->compare(data_ + dimension_ * id, query, (unsigned)dimension_);
+
+      retset.emplace_back(id, dist, true);
+      // set flags
+      flags[id] = true;
+    }
+    // 对 retset 从小到大排序
+    // 函数指针
+    auto cmp = [](Neighbor &a, Neighbor &b) -> bool
+    {
+      return a.distance < b.distance;
+    };
+    std::sort(retset.begin(), retset.end(), cmp);
+
+    // 距离 query 最近的 id 放到 LRU 缓存头部
+    hot_points_lru->put(retset[0].id);
+
+    // greedy search
+    int k = 0;
+    while (k < (int)L)
+    {
+      int len = (L < retset.size()) ? L : retset.size();
+      int nk = len;
+
+      if (retset[k].flag)
+      {
+        retset[k].flag = false;
+        unsigned n = retset[k].id;
+
+        for (unsigned m = 0; m < final_graph_[n].size(); ++m)
+        {
+          unsigned id = final_graph_[n][m];
+
+          if (flags[id])
+          {
+            continue;
+          }
+          flags[id] = 1;
+          float dist =
+              distance_->compare(query, data_ + dimension_ * id, (unsigned)dimension_);
+
+          if (dist >= retset[len - 1].distance)
+          {
+            continue;
+          }
+
+          Neighbor nn(id, dist, true);
+          auto r = InsertIntoPool(retset, len, nn);
+
+          // update len
+          len = (L < retset.size()) ? L : retset.size();
+
+          if (r < nk)
+          {
+            // 在 r 位置插入了一个 nn
+            // 回溯
+            nk = r;
+          }
+        }
+      }
+      // 回溯
+      if (nk <= k)
+      {
+        k = nk;
+      }
+      else
+      {
+        ++k;
+      }
+    }
+
+    // 记录搜索结果
+    for (auto i = 0; i < K; i++)
+    {
+      indices[i] = retset[i].id;
+    }
+
+    // 把 query 结果中，离这个 query 最近的点，当作热点加入到热点队列中
+    update_hot_point(indices[0]);
+  }
+
+  // @CS0522
+  // 记录搜索请求
+  void IndexWADG_BM::record_query(const float *query)
+  {
+    // 加入搜索请求
+    query_list.push_back(query);
+  }
+
+  // @CS0522
+  void IndexWADG_BM::update_hot_point(unsigned hot_point_id)
+  {
+    // 每次搜索结果中首个元素应该就是距离最近的点
+    hot_points_lru->put(hot_point_id);
+
+    update_hot_points_count += 1;
+  }
+
+  // @CS0522
+  void IndexWADG_BM::print_info(unsigned query_num, unsigned L, unsigned K)
+  {
+    std::cout << "\n===== WADG =====\n"
+              << std::endl;
+    std::cout << "Queries: " << query_num << std::endl;
+    std::cout << "Update hot points times: " << this->update_hot_points_count << std::endl;
+
+    // print hyper parameters
+    std::cout << "Hyperparameters: "
+              << "Q (search length) = " << L
+              << ", K (nearest neighbors) = " << K
+              << ", L (cache length) = " << this->max_hot_points_num << std::endl;
+
+    std::cout << "\n===== END =====\n";
+  }
+}

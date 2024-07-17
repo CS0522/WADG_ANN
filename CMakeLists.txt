@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 2.8)
 
 project(efanna2e)
 include_directories(${PROJECT_SOURCE_DIR}/include)
+
+# mimalloc
+find_package(mimalloc 1.8 REQUIRED NO_SYSTEM_ENVIRONMENT_PATH)
+message(STATUS "Found mimalloc installed at: ${MIMALLOC_LIBRARY_DIR} (${MIMALLOC_VERSION_DIR})")
+
 #OpenMP
 find_package(OpenMP)
 if (OPENMP_FOUND)

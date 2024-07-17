@@ -698,7 +698,6 @@ namespace efanna2e
     }
   }
 
-  // TODO
   void IndexNSG::print_info(unsigned query_num, unsigned L, unsigned K)
   {
     std::cout << "\n===== NSG =====\n"

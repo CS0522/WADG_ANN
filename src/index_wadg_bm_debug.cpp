@@ -6,7 +6,7 @@
 
 #include <map>
 #include <cstring>
-#include "efanna2e/index_wadg_debug.h"
+#include "efanna2e/index_wadg_bm_debug.h"
 #include <vector>
 #include <algorithm>
 #include <iomanip>
@@ -22,13 +22,13 @@
 
 namespace efanna2e
 {
-    IndexWADG_DEBUG::IndexWADG_DEBUG(const size_t dimension, const size_t n, Metric m, const unsigned K,
-                                     Index *initializer)
-        : IndexWADG(dimension, n, m, K, initializer), Index_DEBUG()
+    IndexWADG_BM_DEBUG::IndexWADG_BM_DEBUG(const size_t dimension, const size_t n, Metric m, const unsigned K,
+                                           Index *initializer)
+        : IndexWADG_BM(dimension, n, m, K, initializer), Index_DEBUG()
     {
     }
 
-    IndexWADG_DEBUG::~IndexWADG_DEBUG()
+    IndexWADG_BM_DEBUG::~IndexWADG_BM_DEBUG()
     {
         if (distance_ != nullptr)
         {
@@ -42,7 +42,7 @@ namespace efanna2e
         }
     }
 
-    void IndexWADG_DEBUG::Set_lru()
+    void IndexWADG_BM_DEBUG::Set_lru()
     {
         // 初始化 LRU 队列
         // (key, value): (下标, 有效热点 id)
@@ -74,7 +74,7 @@ namespace efanna2e
     }
 
     // DEBUG version
-    void IndexWADG_DEBUG::Search(const float *query,
+    void IndexWADG_BM_DEBUG::Search(const float *query,
                                  const Parameters &parameters,
                                  unsigned *&indices)
     {
@@ -271,9 +271,9 @@ namespace efanna2e
                   << std::endl;
     }
 
-    void IndexWADG_DEBUG::print_info(unsigned query_num, unsigned L, unsigned K)
+    void IndexWADG_BM_DEBUG::print_info(unsigned query_num, unsigned L, unsigned K)
     {
-        std::cout << "\n===== WADG =====\n"
+        std::cout << "\n===== WADG_BM =====\n"
                   << std::endl;
         std::cout << "Queries: " << query_num << std::endl;
         std::cout << "Update hot points times: " << this->update_hot_points_count << std::endl;
@@ -283,7 +283,6 @@ namespace efanna2e
                   << "Q (search length) = " << L
                   << ", K (nearest neighbors) = " << K
                   << ", L (cache length) = " << this->max_hot_points_num << std::endl;
-
 
         std::cout << "\n===== DEBUG =====\n"
                   << std::endl;

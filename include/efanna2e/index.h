@@ -13,12 +13,9 @@
 #include <fstream>
 #include "distance.h"
 #include "parameters.h"
+#include "config.h"
 
 namespace efanna2e {
-
-// @CS0522
-#define NSG_RANDOM false
-#define DEBUG true
 
 class Index {
  public:
