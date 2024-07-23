@@ -15,7 +15,7 @@ namespace efanna2e
     {
     public:
         explicit IndexNSG_BM_DEBUG(const size_t dimension, const size_t n, Metric m,
-                                   Index *initializer);
+                                   Index *initializer, mi_heap_t *&heap_for_index);
 
         virtual ~IndexNSG_BM_DEBUG();
 

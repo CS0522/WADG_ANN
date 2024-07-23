@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <mimalloc-1.8/mimalloc.h>
 
-// TODO 修改为大内存
+// 修改为大内存
 
 void load_data(char* filename, float*& data, unsigned& num,
                unsigned& dim) {  // load data with sift10K pattern
@@ -115,14 +115,11 @@ int main(int argc, char** argv) {
   // @CS0522
   // Heap 内存池
   mi_heap_t *heap_for_index = mi_heap_new();
-  // 堆中分配大内存，返回内存指针
+  // 堆中分配大内存
   auto big_mem_for_data_ptr = mi_heap_malloc(heap_for_index, BIG_MEM_FOR_DATA_SIZE);
 
   float* data_load = new (big_mem_for_data_ptr) float;
   unsigned points_num, dim;
-  // 用于最后关闭映射
-  u_char *data_file_mapping_ptr = nullptr;
-  off_t data_file_size;
   // load_data(argv[1], data_load, points_num, dim);
   load_data_mmap(argv[1], data_load, points_num, dim);
 
@@ -134,7 +131,8 @@ int main(int argc, char** argv) {
   // data_load = efanna2e::data_align(data_load, points_num, dim);//one must
   // align the data before build
   // efanna2e::IndexNSG index(dim, points_num, efanna2e::L2, nullptr);
-  efanna2e::IndexNSG_BM *index = new efanna2e::IndexNSG_BM(dim, points_num, efanna2e::L2, nullptr);
+  efanna2e::Index *index = new efanna2e::IndexNSG_BM(dim, points_num, efanna2e::L2, nullptr, 
+                                                      heap_for_index);
 
   auto s = std::chrono::high_resolution_clock::now();
   efanna2e::Parameters paras;
@@ -144,14 +142,21 @@ int main(int argc, char** argv) {
   paras.Set<std::string>("nn_graph_path", nn_graph_path);
 
   // 修改为大内存
-  // 堆中分配大内存
-  auto big_mem_for_graph_ptr = mi_heap_malloc(heap_for_index, BIG_MEM_FOR_GRAPH_SIZE);
-  index->Build(points_num, data_load, paras, heap_for_index);
+  index->Build(points_num, data_load, paras);
   auto e = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> diff = e - s;
 
   std::cout << "indexing time: " << diff.count() << "\n";
   index->Save(argv[6]);
+
+  // 释放内存
+  mi_free(big_mem_for_data_ptr);
+  // 父类析构会调用子类析构
+  index->~Index();
+  mi_heap_delete(heap_for_index);
+  mi_stats_print(NULL);
+  // 手动触发一次垃圾回收
+  mi_collect(true);
 
   return 0;
 }

@@ -7,7 +7,7 @@ namespace efanna2e
 #define NSG_RANDOM true
 #define DEBUG false
 
-    // 分配未对齐内存
+// 分配未对齐内存
 #define BIG_MEM_FOR_DATA_SIZE 1024 * 1024 * 1024 * 65LL
 #define BIG_MEM_FOR_QUERY_SIZE 1024 * 1024 * 1024 * 1LL
 #define BIG_MEM_FOR_RES_SIZE 1024 * 1024 * 1024 * 10LL

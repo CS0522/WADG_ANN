@@ -13,6 +13,7 @@ add_executable(test_wadg_search test_wadg_search.cpp)
 target_link_libraries(test_wadg_search ${PROJECT_NAME})
 
 add_executable(test_cal_top_K_precision test_cal_top_K_precision.cpp)
+add_executable(test_cal_top_K_precision_bm test_cal_top_K_precision_bm.cpp)
 
 # mimalloc
 add_executable(test_nsg_search_bm test_nsg_search_bm.cpp)

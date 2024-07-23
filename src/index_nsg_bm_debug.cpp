@@ -20,8 +20,8 @@
 namespace efanna2e
 {
     IndexNSG_BM_DEBUG::IndexNSG_BM_DEBUG(const size_t dimension, const size_t n, Metric m,
-                                   Index *initializer)
-        : IndexNSG_BM(dimension, n, m, initializer), Index_DEBUG()
+                                   Index *initializer, mi_heap_t *&heap_for_index)
+        : IndexNSG_BM(dimension, n, m, initializer, heap_for_index), Index_DEBUG()
     {
 
     }

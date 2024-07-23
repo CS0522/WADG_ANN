@@ -1,0 +1,39 @@
+sift1m: 128 dimensions, fvecs
+	- dataset: ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz
+	
+sift1B(BIGANN): 128 dimensions, bvecs
+	- base: ftp://ftp.irisa.fr/local/texmex/corpus/bigann_base.bvecs.gz
+	- query: ftp://ftp.irisa.fr/local/texmex/corpus/bigann_query.bvecs.gz
+	- groundtruth: ftp://ftp.irisa.fr/local/texmex/corpus/bigann_gnd.tar.gz
+	
+gist1m: 960 dimensions, fvecs
+	- dataset: ftp://ftp.irisa.fr/local/texmex/corpus/gist.tar.gz
+	
+BIGANN: 128 dimensions, u8bin
+	- base: https://dl.fbaipublicfiles.com/billion-scale-ann-benchmarks/bigann/base.1B.u8bin
+	- query: https://dl.fbaipublicfiles.com/billion-scale-ann-benchmarks/bigann/query.public.10K.u8bin
+	-groundtruth(notFound): https://comp21storage.blob.core.windows.net/publiccontainer/comp21/bigann/public_query_gt100.bin
+	
+DEEP: 96 dimensions, fbin
+	- base: https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.1B.fbin
+	- query: https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/query.public.10K.fbin
+	- groundtruth: https://storage.yandexcloud.net/yandex-research/ann-datasets/deep_new_groundtruth.public.10K.bin
+	
+SSN++: 256 dimensions, u8bin/rangeres
+	- base: https://dl.fbaipublicfiles.com/billion-scale-ann-benchmarks/FB_ssnpp_database.u8bin
+	- query: https://dl.fbaipublicfiles.com/billion-scale-ann-benchmarks/FB_ssnpp_public_queries.u8bin
+	- groundtruth: https://dl.fbaipublicfiles.com/billion-scale-ann-benchmarks/FB_ssnpp_public_queries_GT.rangeres
+	
+Turing-ANNS: 100 dimensions, fbin
+	- base(notFound): https://comp21storage.blob.core.windows.net/publiccontainer/comp21/MSFT-TURING-ANNS/base1b.fbin
+	- query(notFound): https://comp21storage.blob.core.windows.net/publiccontainer/comp21/MSFT-TURING-ANNS/query100K.fbin
+	- groundtruth(notFound): https://comp21storage.blob.core.windows.net/publiccontainer/comp21/MSFT-TURING-ANNS/query_gt100.bin
+	
+SPACEV: 100 dimenstions, i8bin
+	- base(notFound): https://comp21storage.blob.core.windows.net/publiccontainer/comp21/spacev1b/spacev1b_base.i8bin
+	- query(notFound): https://comp21storage.blob.core.windows.net/publiccontainer/comp21/spacev1b/query.i8bin
+	- groundtruth(notFound): https://comp21storage.blob.core.windows.net/publiccontainer/comp21/spacev1b/public_query_gt100.bin
+	
+Fashion-MNIST: 784 dimensions, hdf5
+	- dataset: http://ann-benchmarks.com/fashion-mnist-784-euclidean.hdf5
+	

@@ -25,7 +25,7 @@ namespace efanna2e
   // @CS0522
   IndexWADG_BM::IndexWADG_BM(const size_t dimension, const size_t n, Metric m, const unsigned K,
                        Index *initializer)
-      : IndexNSG_BM(dimension, n, m, initializer)
+      : IndexNSG_BM(dimension, n, m, initializer, nullptr)
   {
     
   }

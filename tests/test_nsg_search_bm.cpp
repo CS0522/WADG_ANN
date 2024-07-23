@@ -14,7 +14,7 @@
 #include <cstring>
 #include <mimalloc-1.8/mimalloc.h>
 
-// TODO 修改为大内存
+// 修改为大内存
 
 void load_data(char *filename, float *&data, unsigned &num,
                unsigned &dim)
@@ -163,11 +163,12 @@ int main(int argc, char **argv)
   // align the data before build query_load = efanna2e::data_align(query_load,
   // query_num, query_dim);
   // efanna2e::L2确定距离比较器，默认欧氏距离平方
-  efanna2e::IndexNSG_BM* index = new efanna2e::IndexNSG_BM(dim, points_num, efanna2e::L2, nullptr);
+  efanna2e::IndexNSG_BM* index = new efanna2e::IndexNSG_BM(dim, points_num, efanna2e::L2, nullptr,
+                                                            heap_for_search);
   // DEBUG
   if (DEBUG)
   {
-    index = new efanna2e::IndexNSG_BM_DEBUG(dim, points_num, efanna2e::L2, nullptr);
+    index = new efanna2e::IndexNSG_BM_DEBUG(dim, points_num, efanna2e::L2, nullptr, heap_for_search);
   }
   // 修改为大内存
   // 堆中分配大内存

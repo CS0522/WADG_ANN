@@ -21,9 +21,10 @@
 namespace efanna2e
 {
     IndexNSG_BM::IndexNSG_BM(const size_t dimension, const size_t n, Metric m,
-                             Index *initializer)
+                             Index *initializer, mi_heap_t *&heap_for_index)
         : IndexNSG(dimension, n, m, initializer)
     {
+        this->heap_for_index = heap_for_index;
     }
 
     IndexNSG_BM::~IndexNSG_BM()
@@ -38,6 +39,7 @@ namespace efanna2e
             delete initializer_;
             initializer_ = nullptr;
         }
+        this->heap_for_index = nullptr;
     }
 
     // mmap 映射读取 nsg 图
@@ -131,8 +133,6 @@ namespace efanna2e
 
             // 将导航点的全部邻居放入init_ids
             unsigned tmp_l = 0;
-            // final_graph
-            std::cout << "final graph size: " << final_graph_ptr->size() << std::endl;
             for (; tmp_l < L && tmp_l < (*final_graph_ptr)[get_ep_()].size(); tmp_l++)
             {
                 init_ids[tmp_l] = (*final_graph_ptr)[get_ep_()][tmp_l];
@@ -321,8 +321,7 @@ namespace efanna2e
     }
 
     // 修改为大内存
-    void IndexNSG_BM::Build(size_t n, const float *data, const Parameters &parameters,
-                            mi_heap_t *&heap_for_index)
+    void IndexNSG_BM::Build(size_t n, const float *data, const Parameters &parameters)
     {
         std::string nn_graph_path = parameters.Get<std::string>("nn_graph_path");
         unsigned range = parameters.Get<unsigned>("R");
@@ -373,10 +372,11 @@ namespace efanna2e
         printf("Degree Statistics: Max = %d, Min = %d, Avg = %d\n", max, min, avg);
 
         has_built = true;
+        cut_graph_ = nullptr;
         delete cut_graph_;
         // 释放大内存
         mi_free(big_mem_for_cut_graph_ptr);
-        mi_free(big_mem_for_graph_ptr);
+        // mi_free(big_mem_for_graph_ptr);
     }
 
     // mmap 映射读取 nsg 图
@@ -467,8 +467,8 @@ namespace efanna2e
     }
 
     void IndexNSG_BM::get_neighbors(const float *query, const Parameters &parameter,
-                                 std::vector<Neighbor> &retset,
-                                 std::vector<Neighbor> &fullset)
+                                    std::vector<Neighbor> &retset,
+                                    std::vector<Neighbor> &fullset)
     {
         unsigned L = parameter.Get<unsigned>("L");
 
@@ -706,7 +706,7 @@ namespace efanna2e
             return; // No Unlinked Node
 
         std::vector<Neighbor> tmp, pool;
-        get_neighbors(data_ + dimension_ * id, parameter, tmp, pool);
+        this->get_neighbors(data_ + dimension_ * id, parameter, tmp, pool);
         std::sort(pool.begin(), pool.end());
 
         unsigned found = 0;
@@ -735,4 +735,181 @@ namespace efanna2e
         (*final_graph_ptr)[root].push_back(id);
     }
 
+    void IndexNSG_BM::sync_prune(unsigned q, std::vector<Neighbor> &pool,
+                              const Parameters &parameter,
+                              boost::dynamic_bitset<> &flags,
+                              SimpleNeighbor *cut_graph_)
+    {
+        unsigned range = parameter.Get<unsigned>("R");
+        unsigned maxc = parameter.Get<unsigned>("C");
+        width = range;
+        unsigned start = 0;
+
+        for (unsigned nn = 0; nn < (*final_graph_ptr)[q].size(); nn++)
+        {
+            unsigned id = (*final_graph_ptr)[q][nn];
+            if (flags[id])
+                continue;
+            float dist =
+                distance_->compare(data_ + dimension_ * (size_t)q,
+                                   data_ + dimension_ * (size_t)id, (unsigned)dimension_);
+            pool.push_back(Neighbor(id, dist, true));
+        }
+
+        std::sort(pool.begin(), pool.end());
+        std::vector<Neighbor> result;
+        if (pool[start].id == q)
+            start++;
+        result.push_back(pool[start]);
+
+        while (result.size() < range && (++start) < pool.size() && start < maxc)
+        {
+            auto &p = pool[start];
+            bool occlude = false;
+            for (unsigned t = 0; t < result.size(); t++)
+            {
+                if (p.id == result[t].id)
+                {
+                    occlude = true;
+                    break;
+                }
+                float djk = distance_->compare(data_ + dimension_ * (size_t)result[t].id,
+                                               data_ + dimension_ * (size_t)p.id,
+                                               (unsigned)dimension_);
+                if (djk < p.distance /* dik */)
+                {
+                    occlude = true;
+                    break;
+                }
+            }
+            if (!occlude)
+                result.push_back(p);
+        }
+
+        SimpleNeighbor *des_pool = cut_graph_ + (size_t)q * (size_t)range;
+        for (size_t t = 0; t < result.size(); t++)
+        {
+            des_pool[t].id = result[t].id;
+            des_pool[t].distance = result[t].distance;
+        }
+        if (result.size() < range)
+        {
+            des_pool[result.size()].distance = -1;
+        }
+    }
+
+    void IndexNSG_BM::InterInsert(unsigned n, unsigned range,
+                               std::vector<std::mutex> &locks,
+                               SimpleNeighbor *cut_graph_)
+    {
+        SimpleNeighbor *src_pool = cut_graph_ + (size_t)n * (size_t)range;
+        for (size_t i = 0; i < range; i++)
+        {
+            if (src_pool[i].distance == -1)
+                break;
+
+            SimpleNeighbor sn(n, src_pool[i].distance);
+            size_t des = src_pool[i].id;
+            SimpleNeighbor *des_pool = cut_graph_ + des * (size_t)range;
+
+            std::vector<SimpleNeighbor> temp_pool;
+            int dup = 0;
+            {
+                LockGuard guard(locks[des]);
+                for (size_t j = 0; j < range; j++)
+                {
+                    if (des_pool[j].distance == -1)
+                        break;
+                    if (n == des_pool[j].id)
+                    {
+                        dup = 1;
+                        break;
+                    }
+                    temp_pool.push_back(des_pool[j]);
+                }
+            }
+            if (dup)
+                continue;
+
+            temp_pool.push_back(sn);
+            if (temp_pool.size() > range)
+            {
+                std::vector<SimpleNeighbor> result;
+                unsigned start = 0;
+                std::sort(temp_pool.begin(), temp_pool.end());
+                result.push_back(temp_pool[start]);
+                while (result.size() < range && (++start) < temp_pool.size())
+                {
+                    auto &p = temp_pool[start];
+                    bool occlude = false;
+                    for (unsigned t = 0; t < result.size(); t++)
+                    {
+                        if (p.id == result[t].id)
+                        {
+                            occlude = true;
+                            break;
+                        }
+                        float djk = distance_->compare(data_ + dimension_ * (size_t)result[t].id,
+                                                       data_ + dimension_ * (size_t)p.id,
+                                                       (unsigned)dimension_);
+                        if (djk < p.distance /* dik */)
+                        {
+                            occlude = true;
+                            break;
+                        }
+                    }
+                    if (!occlude)
+                        result.push_back(p);
+                }
+                {
+                    LockGuard guard(locks[des]);
+                    for (unsigned t = 0; t < result.size(); t++)
+                    {
+                        des_pool[t] = result[t];
+                    }
+                }
+            }
+            else
+            {
+                LockGuard guard(locks[des]);
+                for (unsigned t = 0; t < range; t++)
+                {
+                    if (des_pool[t].distance == -1)
+                    {
+                        des_pool[t] = sn;
+                        if (t + 1 < range)
+                            des_pool[t + 1].distance = -1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    void IndexNSG_BM::Link(const Parameters &parameters, SimpleNeighbor *cut_graph_)
+    {
+        unsigned range = parameters.Get<unsigned>("R");
+        std::vector<std::mutex> locks(nd_);
+#pragma omp parallel
+        {
+            // unsigned cnt = 0;
+            std::vector<Neighbor> pool, tmp;
+            boost::dynamic_bitset<> flags{nd_, 0};
+#pragma omp for schedule(dynamic, 100)
+            for (unsigned n = 0; n < nd_; ++n)
+            {
+                pool.clear();
+                tmp.clear();
+                flags.reset();
+                this->get_neighbors(data_ + dimension_ * n, parameters, flags, tmp, pool);
+                sync_prune(n, pool, parameters, flags, cut_graph_);
+            }
+        }
+
+#pragma omp for schedule(dynamic, 100)
+        for (unsigned n = 0; n < nd_; ++n)
+        {
+            InterInsert(n, range, locks, cut_graph_);
+        }
+    }
 }
